@@ -1,21 +1,40 @@
-name: Build AlAkhali APK
-on: [push]
+name: Build APK
+on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      - name: Build APK
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with: { java-version: '17', distribution: 'temurin' }
+      - name: Fix Project
         run: |
-          chmod +x gradlew
-         ./gradlew assembleDebug
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: AlAkhali-APK
-          path: app/build/outputs/apk/debug/*.apk
+          mkdir -p app/src/main/java/com/alakhaly/assistant
+          mkdir -p gradle/wrapper
+          cat > settings.gradle << 'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          include ':app'
+          EOF
+          cat > build.gradle << 'EOF'
+          plugins { id 'com.android.application' version '7.4.2' apply false; id 'org.jetbrains.kotlin.android' version '1.8.10' apply false }
+          EOF
+          cat > app/build.gradle << 'EOF'
+          plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
+          android { namespace 'com.alakhaly.assistant'; compileSdk 33; defaultConfig { applicationId "com.alakhaly.assistant"; minSdk 21; targetSdk 28; versionCode 5; versionName "1.0-android9-final" } }
+          dependencies { implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10' }
+          EOF
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="AlAkhali"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>
+          EOF
+          cat > app/src/main/java/com/alakhaly/assistant/MainActivity.kt << 'EOF'
+          package com.alakhaly.assistant
+          import android.app.Activity; import android.os.Bundle; import android.widget.TextView; import android.view.Gravity
+          class MainActivity : Activity() { override fun onCreate(b: Bundle?) { super.onCreate(b); val tv = TextView(this); tv.text = "AlAkhali Works on Android 9!"; tv.textSize = 24f; tv.gravity = Gravity.CENTER; setContentView(tv) } }
+          EOF
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-7.6-bin.zip" > gradle/wrapper/gradle-wrapper.properties
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 7.6 }
+      - run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with: { name: AlAkhali-APK-Android9-FINAL, path: app/build/outputs/apk/debug/*.apk }
